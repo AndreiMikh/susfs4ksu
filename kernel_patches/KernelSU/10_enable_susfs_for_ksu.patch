@@ -177,7 +177,7 @@ index f3485588..14a40b61 100644
 +
  # Keep a new line here!! Because someone may append config
 diff --git a/kernel/core/init.c b/kernel/core/init.c
-index deb0af6e..e4c456e5 100644
+index 86df4a7e..e4c456e5 100644
 --- a/kernel/core/init.c
 +++ b/kernel/core/init.c
 @@ -6,6 +6,7 @@
@@ -271,7 +271,7 @@ index deb0af6e..e4c456e5 100644
      if (allow_shell) {
          pr_alert("shell is allowed at init!");
      }
-@@ -132,76 +97,40 @@ int __init kernelsu_init(void)
+@@ -132,78 +97,40 @@ int __init kernelsu_init(void)
          return -ENOSYS;
      }
  
@@ -317,29 +317,31 @@ index deb0af6e..e4c456e5 100644
 -        track_throne(false);
 +    ksu_sulog_init();
  
+-        ksu_feature_apply_forced();
++    ksu_adb_root_init();
+ 
 -        if (!getenforce()) {
 -            pr_info("Permissive SELinux, enforcing\n");
 -            setenforce(true);
 -        }
-+    ksu_adb_root_init();
++    ksu_selinux_hide_init();
  
 -    } else {
 -        ksu_syscall_hook_manager_init();
-+    ksu_selinux_hide_init();
- 
--        ksu_allowlist_init();
 +    ksu_allowlist_init();
  
--        ksu_throne_tracker_init();
+-        ksu_allowlist_init();
 +    ksu_throne_tracker_init();
  
--        ksu_ksud_init();
+-        ksu_throne_tracker_init();
 +    ksu_ksud_init();
+ 
+-        ksu_ksud_init();
++    ksu_file_wrapper_init();
  
 -        ksu_file_wrapper_init();
 -    }
-+    ksu_file_wrapper_init();
- 
+-
 -#ifdef MODULE
 -#ifndef CONFIG_KSU_DEBUG
 -    kobject_del(&THIS_MODULE->mkobj.kobj);
@@ -361,7 +363,7 @@ index deb0af6e..e4c456e5 100644
  
      // Wait for any in-flight RCU readers (e.g. handler traversing allow_list)
      synchronize_rcu();
-@@ -214,9 +143,11 @@ void __exit kernelsu_exit(void)
+@@ -216,9 +143,11 @@ void __exit kernelsu_exit(void)
      ksu_allowlist_exit();
  
      ksu_selinux_hide_exit();
@@ -2246,7 +2248,7 @@ index 0e223df7..f63c84a8 100644
  
  #endif
 diff --git a/kernel/policy/feature.h b/kernel/policy/feature.h
-index 80e3a9d5..7607146c 100644
+index e3936078..50d1891c 100644
 --- a/kernel/policy/feature.h
 +++ b/kernel/policy/feature.h
 @@ -2,7 +2,7 @@
@@ -2259,10 +2261,10 @@ index 80e3a9d5..7607146c 100644
  typedef int (*ksu_feature_get_t)(u64 *value);
  typedef int (*ksu_feature_set_t)(u64 value);
 diff --git a/kernel/runtime/boot_event.c b/kernel/runtime/boot_event.c
-index 7fcb1d9d..99dcb7dd 100644
+index 91848e6c..d469c213 100644
 --- a/kernel/runtime/boot_event.c
 +++ b/kernel/runtime/boot_event.c
-@@ -13,6 +13,7 @@
+@@ -14,6 +14,7 @@
  
  bool ksu_module_mounted __read_mostly = false;
  bool ksu_boot_completed __read_mostly = false;
@@ -2270,7 +2272,7 @@ index 7fcb1d9d..99dcb7dd 100644
  
  void on_post_fs_data(void)
  {
-@@ -29,7 +30,10 @@ void on_post_fs_data(void)
+@@ -30,7 +31,10 @@ void on_post_fs_data(void)
      ksu_load_allow_list();
      ksu_observer_init();
      // Sanity check for safe mode only needs early-boot input samples.
@@ -2280,8 +2282,8 @@ index 7fcb1d9d..99dcb7dd 100644
 +        pr_info("ksu_input_hook is disabled\n");
 +    }
      ksu_selinux_hide_handle_post_fs_data();
- }
- 
+     // retry forced features which failed at second stage
+     ksu_feature_apply_forced();
 diff --git a/kernel/runtime/ksud.h b/kernel/runtime/ksud.h
 index 09384def..ba238519 100644
 --- a/kernel/runtime/ksud.h
@@ -2311,7 +2313,7 @@ index 09384def..ba238519 100644
 +                             struct user_arg_ptr *envp, int *flags);
  #endif
 diff --git a/kernel/runtime/ksud_integration.c b/kernel/runtime/ksud_integration.c
-index 6ee9b39d..6f81803c 100644
+index e8c69947..dc3439db 100644
 --- a/kernel/runtime/ksud_integration.c
 +++ b/kernel/runtime/ksud_integration.c
 @@ -11,7 +11,6 @@
@@ -2322,9 +2324,9 @@ index 6ee9b39d..6f81803c 100644
  #include <linux/printk.h>
  #include <linux/types.h>
  #include <linux/uaccess.h>
-@@ -26,8 +25,11 @@
- #include "runtime/ksud.h"
+@@ -27,8 +26,11 @@
  #include "runtime/ksud_boot.h"
+ #include "policy/feature.h"
  #include "selinux/selinux.h"
 -#include "hook/syscall_hook.h"
 -#include "hook/syscall_event_bridge.h"
@@ -2336,7 +2338,7 @@ index 6ee9b39d..6f81803c 100644
  
  // clang-format off
  static const char KERNEL_SU_RC[] =
-@@ -49,43 +51,25 @@ static const char KERNEL_SU_RC[] =
+@@ -50,43 +52,25 @@ static const char KERNEL_SU_RC[] =
      "\n";
  // clang-format on
  
@@ -2390,7 +2392,7 @@ index 6ee9b39d..6f81803c 100644
  }
  
  /*
-@@ -135,7 +119,7 @@ static bool check_argv(struct user_arg_ptr argv, int index, const char *expected
+@@ -136,7 +120,7 @@ static bool check_argv(struct user_arg_ptr argv, int index, const char *expected
      if (!p || IS_ERR(p))
          goto fail;
  
@@ -2399,7 +2401,7 @@ index 6ee9b39d..6f81803c 100644
          goto fail;
  
      buf[buf_len - 1] = '\0';
-@@ -146,37 +130,54 @@ fail:
+@@ -147,39 +131,56 @@ fail:
      return false;
  }
  
@@ -2428,6 +2430,8 @@ index 6ee9b39d..6f81803c 100644
 -            apply_kernelsu_rules();
 -            cache_sid();
 -            setup_ksu_cred();
+-            // after apply_kernelsu_rules, so that selinux_hide has its sepolicy backup
+-            ksu_feature_apply_forced();
 -            init_second_stage_executed = true;
 +
 +    if (!filename_ptr)
@@ -2448,6 +2452,8 @@ index 6ee9b39d..6f81803c 100644
 +                apply_kernelsu_rules();
 +                cache_sid();
 +                setup_ksu_cred();
++                // after apply_kernelsu_rules, so that selinux_hide has its sepolicy backup
++                ksu_feature_apply_forced();
 +                static_branch_disable(&is_init_second_stage_not_executed);
 +            }
          }
@@ -2475,7 +2481,7 @@ index 6ee9b39d..6f81803c 100644
  }
  
  static ssize_t (*orig_read)(struct file *, char __user *, size_t, loff_t *);
-@@ -434,13 +435,16 @@ static void ksu_install_rc_hook(struct file *file)
+@@ -437,13 +438,16 @@ static void ksu_install_rc_hook(struct file *file)
          return;
      }
      rc_hooked = true;
@@ -2494,7 +2500,7 @@ index 6ee9b39d..6f81803c 100644
      pr_info("read init.rc, comm: %s, rc_count: %zu, module_rc: %zu\n", current->comm, ksu_rc_len, module_rc_len);
  
      // Now we need to proxy the read and modify the result!
-@@ -459,7 +463,7 @@ static void ksu_install_rc_hook(struct file *file)
+@@ -462,7 +466,7 @@ static void ksu_install_rc_hook(struct file *file)
      file->f_op = &fops_proxy;
  }
  
@@ -2503,7 +2509,7 @@ index 6ee9b39d..6f81803c 100644
  {
      struct file *file = fget(fd);
      if (!file) {
-@@ -482,11 +486,13 @@ int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *v
+@@ -485,11 +489,13 @@ int ksu_handle_input_handle_event(unsigned int *type, unsigned int *code, int *v
          int val = *value;
          pr_info("KEY_VOLUMEDOWN val: %d\n", val);
          if (val) {
@@ -2520,7 +2526,7 @@ index 6ee9b39d..6f81803c 100644
          }
      }
  
-@@ -501,12 +507,11 @@ bool ksu_is_safe_mode()
+@@ -504,12 +510,11 @@ bool ksu_is_safe_mode()
          return true;
      }
  
@@ -2537,7 +2543,7 @@ index 6ee9b39d..6f81803c 100644
  
      pr_info("volumedown_pressed_count: %d\n", volumedown_pressed_count);
      if (is_volumedown_enough(volumedown_pressed_count)) {
-@@ -519,66 +524,13 @@ bool ksu_is_safe_mode()
+@@ -522,66 +527,13 @@ bool ksu_is_safe_mode()
      return false;
  }
  
@@ -2608,7 +2614,7 @@ index 6ee9b39d..6f81803c 100644
      if (file) {
          if (is_init_rc(file)) {
              pr_info("stat init.rc");
-@@ -588,85 +540,20 @@ static long ksu_sys_fstat(const struct pt_regs *regs)
+@@ -591,85 +543,20 @@ static long ksu_sys_fstat(const struct pt_regs *regs)
          fput(file);
      }
  
@@ -3008,7 +3014,7 @@ index 635ec01c..c7b28b86 100644
  int ksu_sulog_emit_grant_root(int retval, __u32 uid, __u32 euid, gfp_t gfp);
  
 diff --git a/kernel/supercall/dispatch.c b/kernel/supercall/dispatch.c
-index 1c87ae19..1844cac6 100644
+index 5f86e3fe..50dc074c 100644
 --- a/kernel/supercall/dispatch.c
 +++ b/kernel/supercall/dispatch.c
 @@ -4,6 +4,8 @@
@@ -3103,7 +3109,7 @@ index 1c87ae19..1844cac6 100644
      }
      return ret;
  }
-@@ -464,49 +445,32 @@ static int do_manage_mark(void __user *arg)
+@@ -470,49 +451,32 @@ static int do_manage_mark(void __user *arg)
      }
  
      switch (cmd.operation) {
@@ -3174,7 +3180,7 @@ index 1c87ae19..1844cac6 100644
      }
      if (copy_to_user(arg, &cmd, sizeof(cmd))) {
          pr_err("manage_mark: copy_to_user failed\n");
-@@ -516,6 +480,87 @@ static int do_manage_mark(void __user *arg)
+@@ -522,6 +486,87 @@ static int do_manage_mark(void __user *arg)
      return 0;
  }
  

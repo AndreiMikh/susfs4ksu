@@ -1,0 +1,52 @@
+name: Mirror SUSFS Test
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+permissions:
+  contents: write
+concurrency:
+  group: susfs-mirror
+  cancel-in-progress: false
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      # Restore Cached Git Repository
+      - name: Restore Git Cache
+        uses: actions/cache/restore@v6
+        with:
+          path: susfs4ksu.git
+          key: susfs4ksu-mirror-${{ runner.os }}
+          restore-keys: |
+            susfs4ksu-mirror-
+
+      # Fetch Updates and Sync Branches and Tags
+      - name: Mirror GitLab Repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          SOURCE="https://gitlab.com/simonpunk/susfs4ksu.git"
+          TARGET="https://x-access-token:${GH_TOKEN}@github.com/AndreiMikh/susfs4ksu.git"
+          if [[ ! -d "susfs4ksu.git/objects" ]]; then
+            echo "└─ ⚙️ Initializing Mirror Repository"
+            git clone --mirror "$SOURCE" susfs4ksu.git
+          else
+            echo "└─ ♻️ Reusing Cached Mirror Repository"
+            git --git-dir=susfs4ksu.git remote set-url origin "$SOURCE"
+            git --git-dir=susfs4ksu.git fetch --prune origin
+          fi
+
+          git --git-dir=susfs4ksu.git push "$TARGET" \
+            '+refs/heads/*:refs/heads/*' \
+            '+refs/tags/*:refs/tags/*'
+          echo "└─ 🎉 SUSFS4KSU Branches and Tags Synchronized"
+
+      # Save Updated Git repository
+      - name: Save Git Cache
+        if: success()
+        uses: actions/cache/save@v6
+        with:
+          path: susfs4ksu.git
+          key: susfs4ksu-mirror-${{ runner.os }}

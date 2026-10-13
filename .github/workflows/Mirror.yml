@@ -5,6 +5,9 @@ on:
     - cron: "0 */6 * * *"
 permissions:
   contents: write
+concurrency:
+  group: susfs-mirror
+  cancel-in-progress: false
 jobs:
   mirror:
     runs-on: ubuntu-latest
@@ -14,6 +17,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -Eeuo pipefail
-          git clone --mirror https://gitlab.com/simonpunk/susfs4ksu.git
+          SOURCE="https://gitlab.com/simonpunk/susfs4ksu.git"
+          TARGET="https://x-access-token:${GH_TOKEN}@github.com/AndreiMikh/susfs4ksu.git"
+          git clone --mirror "$SOURCE" susfs4ksu.git
           cd susfs4ksu.git
-          git push --mirror "https://x-access-token:${GH_TOKEN}@github.com/AndreiMikh/susfs4ksu.git"
+          git push "$TARGET" \
+            '+refs/heads/*:refs/heads/*' \
+            '+refs/tags/*:refs/tags/*'
+          echo "└─ SUSFS4KSU branches and tags synchronized"

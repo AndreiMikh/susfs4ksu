@@ -41,7 +41,7 @@ index 9f5d06f4a..eeea6b70b 100644
  obj-$(CONFIG_PROC_FS)		+= proc_namespace.o
  obj-$(CONFIG_LEGACY_DIRECT_IO)	+= direct-io.o
 diff --git a/fs/exec.c b/fs/exec.c
-index f5f972488..b746807aa 100644
+index f5f972488..996267b3d 100644
 --- a/fs/exec.c
 +++ b/fs/exec.c
 @@ -69,6 +69,9 @@
@@ -54,13 +54,14 @@ index f5f972488..b746807aa 100644
  
  #include <linux/uaccess.h>
  #include <asm/mmu_context.h>
-@@ -1910,6 +1913,17 @@ static int bprm_execve(struct linux_binprm *bprm)
+@@ -1910,6 +1913,18 @@ static int bprm_execve(struct linux_binprm *bprm)
  	return retval;
  }
  
 +#ifdef CONFIG_KSU_SUSFS
 +extern struct static_key_true ksu_su_compat_enabled;
 +extern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;
++extern bool __ksu_is_allow_uid_for_current(uid_t uid);
 +extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
 +			void *envp, int *flags);
 +extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr, void *argv,
@@ -72,7 +73,7 @@ index f5f972488..b746807aa 100644
  static int do_execveat_common(int fd, struct filename *filename,
  			      struct user_arg_ptr argv,
  			      struct user_arg_ptr envp,
-@@ -1917,10 +1931,28 @@ static int do_execveat_common(int fd, struct filename *filename,
+@@ -1917,10 +1932,28 @@ static int do_execveat_common(int fd, struct filename *filename,
  {
  	struct linux_binprm *bprm;
  	int retval;
@@ -101,7 +102,7 @@ index f5f972488..b746807aa 100644
  	/*
  	 * We move the actual failure in case of RLIMIT_NPROC excess from
  	 * set*uid() to execve() because too many poorly written programs
-@@ -1987,6 +2019,10 @@ static int do_execveat_common(int fd, struct filename *filename,
+@@ -1987,6 +2020,10 @@ static int do_execveat_common(int fd, struct filename *filename,
  	}
  
  	retval = bprm_execve(bprm);

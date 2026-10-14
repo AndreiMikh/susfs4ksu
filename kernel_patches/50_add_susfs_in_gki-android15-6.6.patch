@@ -41,7 +41,7 @@ index c6963a9a4..e27ac368b 100644
  obj-$(CONFIG_PROC_FS)		+= proc_namespace.o
  obj-$(CONFIG_LEGACY_DIRECT_IO)	+= direct-io.o
 diff --git a/fs/exec.c b/fs/exec.c
-index 71bd99ce8..26da8eaf9 100644
+index 71bd99ce8..a44770816 100644
 --- a/fs/exec.c
 +++ b/fs/exec.c
 @@ -67,6 +67,9 @@
@@ -54,14 +54,13 @@ index 71bd99ce8..26da8eaf9 100644
  
  #ifndef __GENKSYMS__
  #include <linux/dma-buf.h>
-@@ -1925,6 +1928,18 @@ static int bprm_execve(struct linux_binprm *bprm,
+@@ -1925,6 +1928,17 @@ static int bprm_execve(struct linux_binprm *bprm,
  	return retval;
  }
  
 +#ifdef CONFIG_KSU_SUSFS
 +extern struct static_key_true ksu_su_compat_enabled;
 +extern struct static_key_true susfs_is_sdcard_android_data_not_decrypted;
-+extern bool __ksu_is_allow_uid_for_current(uid_t uid);
 +extern int ksu_handle_execveat(int *fd, struct filename **filename_ptr, void *argv,
 +			void *envp, int *flags);
 +extern int ksu_handle_execveat_sucompat(int *fd, struct filename **filename_ptr, void *argv,
@@ -73,7 +72,7 @@ index 71bd99ce8..26da8eaf9 100644
  static int do_execveat_common(int fd, struct filename *filename,
  			      struct user_arg_ptr argv,
  			      struct user_arg_ptr envp,
-@@ -1932,10 +1947,28 @@ static int do_execveat_common(int fd, struct filename *filename,
+@@ -1932,10 +1946,28 @@ static int do_execveat_common(int fd, struct filename *filename,
  {
  	struct linux_binprm *bprm;
  	int retval;
@@ -102,7 +101,7 @@ index 71bd99ce8..26da8eaf9 100644
  	/*
  	 * We move the actual failure in case of RLIMIT_NPROC excess from
  	 * set*uid() to execve() because too many poorly written programs
-@@ -2002,6 +2035,10 @@ static int do_execveat_common(int fd, struct filename *filename,
+@@ -2002,6 +2034,10 @@ static int do_execveat_common(int fd, struct filename *filename,
  	}
  
  	retval = bprm_execve(bprm, fd, filename, flags);
@@ -2446,7 +2445,7 @@ index 7851c9fd4..b34c5e8cb 100644
  						&sid, GFP_KERNEL);
  		if (error == -EINVAL && !strcmp(name, "fscreate")) {
 diff --git a/security/selinux/selinuxfs.c b/security/selinux/selinuxfs.c
-index f01c07499..66e3c0ba9 100644
+index f01c07499..9bbb9b0a8 100644
 --- a/security/selinux/selinuxfs.c
 +++ b/security/selinux/selinuxfs.c
 @@ -44,6 +44,19 @@
@@ -2469,23 +2468,14 @@ index f01c07499..66e3c0ba9 100644
  enum sel_inos {
  	SEL_ROOT_INO = 2,
  	SEL_LOAD,	/* load policy */
-@@ -219,6 +232,30 @@ static const struct file_operations sel_handle_unknown_ops = {
+@@ -219,12 +232,31 @@ static const struct file_operations sel_handle_unknown_ops = {
  static int sel_open_handle_status(struct inode *inode, struct file *filp)
  {
  	struct page    *status = selinux_kernel_status_page();
 +#ifdef CONFIG_KSU_SUSFS
 +	void *data;
-+	bool should_check_current = (likely(current_uid().val >= 10000 && ksu_selinux_hide_running));
 +
-+	if (static_branch_unlikely(&fake_status_initialize_key)) {
-+		if (!fake_status) {
-+			initialize_fake_status();
-+		} else {
-+			goto orig_flow;
-+		}
-+	}
-+
-+	if (should_check_current) {
++	if (likely(current_uid().val >= 10000 && ksu_selinux_hide_running)) {
 +		mutex_lock(&selinux_state.status_lock);
 +		data = fake_status;
 +		mutex_unlock(&selinux_state.status_lock);
@@ -2494,13 +2484,23 @@ index f01c07499..66e3c0ba9 100644
 +			return 0;
 +		}
 +	}
-+
-+orig_flow:
 +#endif // #ifdef CONFIG_KSU_SUSFS
  
  	if (!status)
  		return -ENOMEM;
-@@ -648,20 +685,45 @@ static ssize_t sel_write_context(struct file *file, char *buf, size_t size)
+ 
+ 	filp->private_data = status;
+ 
++#ifdef CONFIG_KSU_SUSFS
++	if (static_branch_unlikely(&fake_status_initialize_key)) {
++		if (!fake_status)
++			initialize_fake_status();
++	}
++#endif // #ifdef CONFIG_KSU_SUSFS
+ 	return 0;
+ }
+ 
+@@ -648,20 +680,45 @@ static ssize_t sel_write_context(struct file *file, char *buf, size_t size)
  	char *canon = NULL;
  	u32 sid, len;
  	ssize_t length;
@@ -2546,7 +2546,7 @@ index f01c07499..66e3c0ba9 100644
  	length = -ERANGE;
  	if (len > SIMPLE_TRANSACTION_LIMIT) {
  		pr_err("SELinux: %s:  context size (%u) exceeds "
-@@ -872,6 +934,9 @@ static ssize_t sel_write_access(struct file *file, char *buf, size_t size)
+@@ -872,6 +929,9 @@ static ssize_t sel_write_access(struct file *file, char *buf, size_t size)
  	u16 tclass;
  	struct av_decision avd;
  	ssize_t length;
@@ -2556,7 +2556,7 @@ index f01c07499..66e3c0ba9 100644
  
  	length = avc_has_perm(current_sid(), SECINITSID_SECURITY,
  			      SECCLASS_SECURITY, SECURITY__COMPUTE_AV, NULL);
-@@ -892,16 +957,46 @@ static ssize_t sel_write_access(struct file *file, char *buf, size_t size)
+@@ -892,16 +952,46 @@ static ssize_t sel_write_access(struct file *file, char *buf, size_t size)
  	if (sscanf(buf, "%s %s %hu", scon, tcon, &tclass) != 3)
  		goto out;
  

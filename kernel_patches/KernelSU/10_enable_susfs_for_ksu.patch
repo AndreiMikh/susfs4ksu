@@ -2810,7 +2810,7 @@ index 7b8981c2..22e5e3be 100644
 +    return false;
  }
 diff --git a/kernel/preinit/preinit.h b/kernel/preinit/preinit.h
-index 34eb056b..bf6014fe 100644
+index 34eb056b..a51d2c98 100644
 --- a/kernel/preinit/preinit.h
 +++ b/kernel/preinit/preinit.h
 @@ -21,6 +21,7 @@ bool ksu_preinit_enabled_param(void);
@@ -2821,7 +2821,7 @@ index 34eb056b..bf6014fe 100644
  }
  static inline void ksu_preinit_exit(void)
  {
-@@ -29,14 +30,16 @@ static inline bool ksu_preinit_handle_execve(const char __user **filename_user,
+@@ -29,13 +30,16 @@ static inline bool ksu_preinit_handle_execve(const char __user **filename_user,
                                               const char __user *const __user *argv_user, int orig_nr,
                                               struct pt_regs *regs, long *ret)
  {
@@ -2834,11 +2834,10 @@ index 34eb056b..bf6014fe 100644
  }
  static inline bool ksu_preinit_enabled_param(void)
  {
--    return false;
 +    pr_info("ksu_preinit_enabled_param: KSU_NO_PREINIT flag is defined\n");
+     return false;
  }
  #endif
- 
 diff --git a/kernel/runtime/boot_event.c b/kernel/runtime/boot_event.c
 index 91848e6c..d469c213 100644
 --- a/kernel/runtime/boot_event.c

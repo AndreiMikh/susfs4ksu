@@ -5,7 +5,6 @@
 #include "features/sus_kstat.h"
 #include "features/sus_mount.h"
 #include "features/sus_map.h"
-#include "features/getprority_uid_filter.h"
 #include "features/spoof_cmdline_or_bootconfig.h"
 #include "features/spoof_uname.h"
 #include "features/avc_log_spoofing.h"

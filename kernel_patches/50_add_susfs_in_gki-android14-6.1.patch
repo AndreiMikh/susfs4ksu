@@ -2483,32 +2483,10 @@ index 344ceaf5e..c2d1a782d 100644
  	if (!ns_capable(pid_ns->user_ns, CAP_SYS_BOOT))
  		return -EPERM;
 diff --git a/kernel/sys.c b/kernel/sys.c
-index 7595dc25d..781828b3e 100644
+index 7595dc25d..9a704f3ec 100644
 --- a/kernel/sys.c
 +++ b/kernel/sys.c
-@@ -274,6 +274,10 @@ SYSCALL_DEFINE3(setpriority, int, which, int, who, int, niceval)
- 	return error;
- }
- 
-+#ifdef CONFIG_KSU_SUSFS
-+extern bool susfs_is_getpriority_uid_filtered(uid_t uid);
-+#endif // #ifdef CONFIG_KSU_SUSFS
-+
- /*
-  * Ugh. To avoid negative return values, "getpriority()" will
-  * not return the normal nice-value, but a negated value that
-@@ -324,6 +328,10 @@ SYSCALL_DEFINE2(getpriority, int, which, int, who)
- 		if (!who)
- 			uid = cred->uid;
- 		else if (!uid_eq(uid, cred->uid)) {
-+#ifdef CONFIG_KSU_SUSFS
-+			if (cred->uid.val >= 10000 && susfs_is_getpriority_uid_filtered(uid.val))
-+				goto out_unlock;
-+#endif // #ifdef CONFIG_KSU_SUSFS
- 			user = find_user(uid);
- 			if (!user)
- 				goto out_unlock;	/* No processes for this user */
-@@ -654,6 +662,9 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
+@@ -654,6 +654,9 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
  	return __sys_setuid(uid);
  }
  
@@ -2518,7 +2496,7 @@ index 7595dc25d..781828b3e 100644
  
  /*
   * This function implements a generic ability to update ruid, euid,
-@@ -668,6 +679,10 @@ long __sys_setresuid(uid_t ruid, uid_t euid, uid_t suid)
+@@ -668,6 +671,10 @@ long __sys_setresuid(uid_t ruid, uid_t euid, uid_t suid)
  	kuid_t kruid, keuid, ksuid;
  	bool ruid_new, euid_new, suid_new;
  
@@ -2529,7 +2507,7 @@ index 7595dc25d..781828b3e 100644
  	kruid = make_kuid(ns, ruid);
  	keuid = make_kuid(ns, euid);
  	ksuid = make_kuid(ns, suid);
-@@ -1298,29 +1313,23 @@ static int override_release(char __user *release, size_t len)
+@@ -1298,29 +1305,23 @@ static int override_release(char __user *release, size_t len)
  	return ret;
  }
  

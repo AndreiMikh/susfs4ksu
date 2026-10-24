@@ -7,21 +7,21 @@
 #include <errno.h>
 #include <susfs_defs.h>
 #include <susfs_utils.h>
-#include "getprority_uid_filter.h"
+#include "priority_uid_filter.h"
 
-#define CMD_SUSFS_SET_GETPRIORITY_UID_FILTER 0x60030
+#define CMD_SUSFS_SET_PRIORITY_UID_FILTER 0x60030
 
 /* The maximum size of the app package names buffer, which is the maximum value of a u16 */
 #define APP_STR_BUF_SIZE 65535
 
-struct st_susfs_getpriority_uid_filter {
+struct st_susfs_priority_uid_filter {
 	char                    app_strings[APP_STR_BUF_SIZE];
 	int                     err;
 };
 
-void getpriority_uid_filter_print_help(void){
-	log("    set_getpriority_uid_filter <app_package_names_separated_by_comma>\n");
-	log("      |--> The uids of the added apps will be invisible for the apps that are abusing the getpriority syscall,\n");
+void priority_uid_filter_print_help(void){
+	log("    set_priority_uid_filter <app_package_names_separated_by_comma>\n");
+	log("      |--> The uids of the added apps will be invisible for the apps that are abusing the getpriority/setpriority syscall,\n");
 	log("      * Important Notes *\n");
 	log("      - The uids of the apps are resolved from their data paths, hence they are always up to date\n");
 	log("      - Only effective for all processes with uid >= 10000\n");
@@ -30,11 +30,11 @@ void getpriority_uid_filter_print_help(void){
 
 static void print_help(void){
 	print_help_banner();
-	getpriority_uid_filter_print_help();
+	priority_uid_filter_print_help();
 }
 
-int set_getpriority_uid_filter(int argc, char *argv[]) {
-	struct st_susfs_getpriority_uid_filter info = {0};
+int set_priority_uid_filter(int argc, char *argv[]) {
+	struct st_susfs_priority_uid_filter info = {0};
 
 	if (argc != 3) {
 		print_help();
@@ -53,7 +53,7 @@ int set_getpriority_uid_filter(int argc, char *argv[]) {
 
 	strncpy(info.app_strings, argv[2], APP_STR_BUF_SIZE-1);
 	info.err = ERR_CMD_NOT_SUPPORTED;
-	syscall(SYS_reboot, KSU_INSTALL_MAGIC1, SUSFS_MAGIC, CMD_SUSFS_SET_GETPRIORITY_UID_FILTER, &info);
-	PRT_MSG_IF_CMD_NOT_SUPPORTED(info.err, CMD_SUSFS_SET_GETPRIORITY_UID_FILTER);
+	syscall(SYS_reboot, KSU_INSTALL_MAGIC1, SUSFS_MAGIC, CMD_SUSFS_SET_PRIORITY_UID_FILTER, &info);
+	PRT_MSG_IF_CMD_NOT_SUPPORTED(info.err, CMD_SUSFS_SET_PRIORITY_UID_FILTER);
 	return info.err;
 }

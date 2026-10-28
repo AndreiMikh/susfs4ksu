@@ -105,7 +105,7 @@ struct susfs_sus_av_rule {
 	u32 s_type;
 	u32 t_type;
 	u32 c_type;
-	u32 allowed_perm;
+	u32 orig_perm;
 };
 
 static inline u32 susfs_av_rule_hash(u32 ssid, u32 tsid, u16 tclass)
@@ -125,7 +125,7 @@ static inline u32 susfs_av_rule_hash(u32 ssid, u32 tsid, u16 tclass)
 	return h;
 }
 
-int susfs_add_sus_allowed_av_rule_by_type(u32 s_type, u32 t_type, u32 c_type, u32 allowed_perm)
+int susfs_add_sus_allowed_av_rule_by_type(u32 s_type, u32 t_type, u32 c_type, u32 orig_perm)
 {
 	struct susfs_sus_av_rule *entry, *tmp_entry;
 	struct hlist_node *tmp_hlist_node;
@@ -145,9 +145,6 @@ int susfs_add_sus_allowed_av_rule_by_type(u32 s_type, u32 t_type, u32 c_type, u3
 		    tmp_entry->c_type == c_type)
 		{
 			kfree(entry);
-			tmp_entry->allowed_perm |= allowed_perm;
-			SUSFS_LOGI("av_rule '%u %u %u %u' has been updated with allowed_perm '%u'\n",
-				s_type, t_type, c_type, tmp_entry->allowed_perm, allowed_perm);
 			goto unlock;
 		}
 	}
@@ -155,11 +152,11 @@ int susfs_add_sus_allowed_av_rule_by_type(u32 s_type, u32 t_type, u32 c_type, u3
 	entry->s_type = s_type;
 	entry->t_type = t_type;
 	entry->c_type = c_type;
-	entry->allowed_perm = allowed_perm;
+	entry->orig_perm = orig_perm;
 
 	hash_add_rcu(SUS_AV_RULE_HLIST, &entry->node, key);
 	SUSFS_LOGI("av_rule '%u %u %u %u' has been added to SUS_AV_RULE_HLIST\n",
-				s_type, t_type, c_type, allowed_perm);
+				s_type, t_type, c_type, orig_perm);
 unlock:
 	mutex_unlock(&susfs_mutex_lock_sus_av_rule_hlist);
 	return err;
@@ -175,9 +172,9 @@ void susfs_spoof_av_rule_rcu(u32 s_type, u32 t_type, u32 c_type, struct av_decis
 		    entry->t_type == t_type &&
 		    entry->c_type == c_type)
 		{
-			SUSFS_LOGI("strip sus allowed_perm '%u %u %u %u'\n",
-				s_type, t_type, c_type, entry->allowed_perm);
-			avd->allowed ^= entry->allowed_perm;
+			SUSFS_LOGI("restoring orig_perm '%u %u %u %u'\n",
+				s_type, t_type, c_type, entry->orig_perm);
+			avd->allowed = entry->orig_perm;
 			return;
 		}
 	}

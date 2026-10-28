@@ -2859,42 +2859,33 @@ index 158f9455..90cc2ac0 100644
 +extern void susfs_add_sus_type_by_type_name(char *type_name);
  #endif
 diff --git a/kernel/selinux/sepolicy.c b/kernel/selinux/sepolicy.c
-index b00e5175..2db63c62 100644
+index b00e5175..fd0c4c1e 100644
 --- a/kernel/selinux/sepolicy.c
 +++ b/kernel/selinux/sepolicy.c
-@@ -14,6 +14,13 @@
+@@ -14,6 +14,11 @@
  #include "klog.h" // IWYU pragma: keep
  #include "ss/symtab.h"
  
 +#ifdef CONFIG_KSU_SUSFS
-+extern int susfs_add_sus_allowed_av_rule_by_type(u32 s_type, u32 t_type, u16 type, u32 allowed_perm);
++extern int susfs_add_sus_allowed_av_rule_by_type(u32 s_type, u32 t_type, u16 type, u32 orig_perm);
 +extern int susfs_add_sus_type(const char *secctx, u32 type_value);
-+extern u16 string_to_security_class(struct policydb *p, const char *name);
-+extern const char *reverse_lookup_class_name(struct policydb *p, struct class_datum *cls);
 +#endif // #ifdef CONFIG_KSU_SUSFS
 +
  #define KSU_SUPPORT_ADD_TYPE
  
  //////////////////////////////////////////////////////
-@@ -307,6 +314,17 @@ static bool add_rule_raw(struct policydb *db, struct type_datum *src, struct typ
+@@ -307,6 +312,10 @@ static bool add_rule_raw(struct policydb *db, struct type_datum *src, struct typ
                  return false;
          }
  
 +#ifdef CONFIG_KSU_SUSFS
-+        if (!invert) {
-+            u32 allowed_perm;
-+            if (perm)
-+                allowed_perm = 1U << (perm->value - 1);
-+            else
-+                allowed_perm = ~0U;
-+            susfs_add_sus_allowed_av_rule_by_type(src->value, tgt->value, cls->value, allowed_perm);
-+        }
++        susfs_add_sus_allowed_av_rule_by_type(src->value, tgt->value, cls->value, node->datum.u.data);
 +#endif // #ifdef CONFIG_KSU_SUSFS
 +
          if (invert) {
              if (perm)
                  node->datum.u.data &= ~(1U << (perm->value - 1));
-@@ -724,6 +742,9 @@ static bool add_type(struct policydb *db, const char *type_name, bool attr)
+@@ -724,6 +733,9 @@ static bool add_type(struct policydb *db, const char *type_name, bool attr)
          ebitmap_set_bit(&db->role_val_to_struct[i]->types, value - 1, 1);
      }
  

@@ -590,7 +590,7 @@ index 7e337abf..8b6e0b3c 100644
      pr_info("handle umount for uid: %d, pid: %d\n", new_uid, current->pid);
  
 diff --git a/kernel/feature/selinux_hide.c b/kernel/feature/selinux_hide.c
-index 8f23888b..6cd0659d 100644
+index 2a41b805..ede875e5 100644
 --- a/kernel/feature/selinux_hide.c
 +++ b/kernel/feature/selinux_hide.c
 @@ -1,9 +1,5 @@
@@ -970,7 +970,7 @@ index 8f23888b..6cd0659d 100644
          ksu_selinux_hide_running = false;
      }
      mutex_unlock(&selinux_hide_mutex);
-@@ -1251,4 +1068,4 @@ out:
+@@ -1265,4 +1082,4 @@ out:
  allow:
      avd->allowed = 0xffffffff;
      goto out;

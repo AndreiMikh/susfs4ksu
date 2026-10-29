@@ -2744,7 +2744,7 @@ index 755325a94..8347aff59 100644
  {
  	struct selinux_fs_info *fsi = file_inode(file)->i_sb->s_fs_info;
 diff --git a/security/selinux/ss/services.c b/security/selinux/ss/services.c
-index 5e7bd32db..16e7c9d20 100644
+index 5e7bd32db..84361bed6 100644
 --- a/security/selinux/ss/services.c
 +++ b/security/selinux/ss/services.c
 @@ -70,6 +70,14 @@
@@ -2755,7 +2755,7 @@ index 5e7bd32db..16e7c9d20 100644
 +extern bool susfs_is_current_ksu_domain(void);
 +extern bool susfs_is_sus_type_rcu(u32 sid);
 +extern int susfs_add_sus_type(const char *secctx, u32 type_value);
-+extern void susfs_spoof_av_rule_rcu(u32 s_type, u32 t_type, u32 c_type, struct av_decision *avd);
++extern void susfs_spoof_avd_allowed_rcu(u32 s_type, u32 t_type, u32 c_type, u32 *avd_allowed);
 +extern struct selinux_state selinux_state;
 +#endif // #ifdef CONFIG_KSU_SUSFS
 +
@@ -3031,7 +3031,7 @@ index 5e7bd32db..16e7c9d20 100644
 +
 +	context_struct_compute_av(policydb, scontext, tcontext, tclass, avd,
 +				  NULL);
-+	susfs_spoof_av_rule_rcu(scontext->type, tcontext->type, tclass, avd);
++	susfs_spoof_avd_allowed_rcu(scontext->type, tcontext->type, tclass, &avd->allowed);
 + out:
 +	rcu_read_unlock();
 +	return;

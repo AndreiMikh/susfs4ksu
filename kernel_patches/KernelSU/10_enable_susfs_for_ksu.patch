@@ -2859,7 +2859,7 @@ index 158f9455..90cc2ac0 100644
 +extern void susfs_add_sus_type_by_type_name(char *type_name);
  #endif
 diff --git a/kernel/selinux/sepolicy.c b/kernel/selinux/sepolicy.c
-index b00e5175..fd0c4c1e 100644
+index b00e5175..e2e59d1a 100644
 --- a/kernel/selinux/sepolicy.c
 +++ b/kernel/selinux/sepolicy.c
 @@ -14,6 +14,11 @@
@@ -2867,7 +2867,7 @@ index b00e5175..fd0c4c1e 100644
  #include "ss/symtab.h"
  
 +#ifdef CONFIG_KSU_SUSFS
-+extern int susfs_add_sus_allowed_av_rule_by_type(u32 s_type, u32 t_type, u16 type, u32 orig_perm);
++extern int susfs_add_sus_avd_allowed_by_type(u32 s_type, u32 t_type, u16 type, u32 orig_avd_allowed);
 +extern int susfs_add_sus_type(const char *secctx, u32 type_value);
 +#endif // #ifdef CONFIG_KSU_SUSFS
 +
@@ -2879,7 +2879,7 @@ index b00e5175..fd0c4c1e 100644
          }
  
 +#ifdef CONFIG_KSU_SUSFS
-+        susfs_add_sus_allowed_av_rule_by_type(src->value, tgt->value, cls->value, node->datum.u.data);
++        susfs_add_sus_avd_allowed_by_type(src->value, tgt->value, cls->value, node->datum.u.data);
 +#endif // #ifdef CONFIG_KSU_SUSFS
 +
          if (invert) {

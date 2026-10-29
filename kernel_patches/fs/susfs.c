@@ -45,14 +45,6 @@ DEFINE_STATIC_KEY_TRUE(susfs_is_log_enabled);
 #define SUSFS_LOGE(fmt, ...) 
 #endif
 
-struct av_decision {
-	u32 allowed;
-	u32 auditallow;
-	u32 auditdeny;
-	u32 seqno;
-	u32 flags;
-};
-
 static DEFINE_MUTEX(susfs_mutex_lock_sus_type);
 static DEFINE_HASHTABLE(SUS_TYPE_HLIST, 10);
 
@@ -97,15 +89,15 @@ bool susfs_is_sus_type_rcu(u32 type_value) {
 	return false;
 }
 
-static DEFINE_MUTEX(susfs_mutex_lock_sus_av_rule_hlist);
-static DEFINE_HASHTABLE(SUS_AV_RULE_HLIST, 18);
+static DEFINE_MUTEX(susfs_mutex_lock_sus_avd_allowed_hlist);
+static DEFINE_HASHTABLE(SUS_AVD_ALLOWED_HLIST, 18);
 
 struct susfs_sus_av_rule {
 	struct hlist_node node;
 	u32 s_type;
 	u32 t_type;
 	u32 c_type;
-	u32 orig_perm;
+	u32 orig_avd_allowed;
 };
 
 static inline u32 susfs_av_rule_hash(u32 ssid, u32 tsid, u16 tclass)
@@ -125,21 +117,21 @@ static inline u32 susfs_av_rule_hash(u32 ssid, u32 tsid, u16 tclass)
 	return h;
 }
 
-int susfs_add_sus_allowed_av_rule_by_type(u32 s_type, u32 t_type, u32 c_type, u32 orig_perm)
+int susfs_add_sus_avd_allowed_by_type(u32 s_type, u32 t_type, u32 c_type, u32 orig_avd_allowed)
 {
 	struct susfs_sus_av_rule *entry, *tmp_entry;
 	struct hlist_node *tmp_hlist_node;
 	int err = 0;
 	u32 key = susfs_av_rule_hash(s_type, t_type, c_type);
 
-	mutex_lock(&susfs_mutex_lock_sus_av_rule_hlist);
+	mutex_lock(&susfs_mutex_lock_sus_avd_allowed_hlist);
 	entry = kzalloc(sizeof(*entry), GFP_ATOMIC);
 	if (!entry) {
 		err = -ENOMEM;
 		goto unlock;
 	}
 
-	hash_for_each_possible_safe(SUS_AV_RULE_HLIST, tmp_entry, tmp_hlist_node, node, key) {
+	hash_for_each_possible_safe(SUS_AVD_ALLOWED_HLIST, tmp_entry, tmp_hlist_node, node, key) {
 		if (tmp_entry->s_type == s_type &&
 		    tmp_entry->t_type == t_type &&
 		    tmp_entry->c_type == c_type)
@@ -152,29 +144,29 @@ int susfs_add_sus_allowed_av_rule_by_type(u32 s_type, u32 t_type, u32 c_type, u3
 	entry->s_type = s_type;
 	entry->t_type = t_type;
 	entry->c_type = c_type;
-	entry->orig_perm = orig_perm;
+	entry->orig_avd_allowed = orig_avd_allowed;
 
-	hash_add_rcu(SUS_AV_RULE_HLIST, &entry->node, key);
-	SUSFS_LOGI("av_rule '%u %u %u %u' has been added to SUS_AV_RULE_HLIST\n",
-				s_type, t_type, c_type, orig_perm);
+	hash_add_rcu(SUS_AVD_ALLOWED_HLIST, &entry->node, key);
+	SUSFS_LOGI("av_rule '%u %u %u %u' has been added to SUS_AVD_ALLOWED_HLIST\n",
+				s_type, t_type, c_type, orig_avd_allowed);
 unlock:
-	mutex_unlock(&susfs_mutex_lock_sus_av_rule_hlist);
+	mutex_unlock(&susfs_mutex_lock_sus_avd_allowed_hlist);
 	return err;
 }
 
-void susfs_spoof_av_rule_rcu(u32 s_type, u32 t_type, u32 c_type, struct av_decision *avd)
+void susfs_spoof_avd_allowed_rcu(u32 s_type, u32 t_type, u32 c_type, u32 *avd_allowed)
 {
 	struct susfs_sus_av_rule *entry;
 	u32 key = susfs_av_rule_hash(s_type, t_type, c_type);
 
-	hash_for_each_possible_rcu(SUS_AV_RULE_HLIST, entry, node, key) {
+	hash_for_each_possible_rcu(SUS_AVD_ALLOWED_HLIST, entry, node, key) {
 		if (entry->s_type == s_type &&
 		    entry->t_type == t_type &&
 		    entry->c_type == c_type)
 		{
-			SUSFS_LOGI("restoring orig_perm '%u %u %u %u'\n",
-				s_type, t_type, c_type, entry->orig_perm);
-			avd->allowed = entry->orig_perm;
+			SUSFS_LOGI("restoring orig_avd_allowed '%u %u %u %u'\n",
+				s_type, t_type, c_type, entry->orig_avd_allowed);
+			*avd_allowed = entry->orig_avd_allowed;
 			return;
 		}
 	}

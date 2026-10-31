@@ -83,15 +83,16 @@ bool susfs_is_sus_type_rcu(u32 type_value) {
 	struct st_susfs_sus_type_hlist *entry = NULL;
 
 	hash_for_each_possible_rcu(SUS_TYPE_HLIST, entry, node, type_value) {
-		//SUSFS_LOGI("type '%u', is sus\n", type_value);
 		return true;
 	}
 	return false;
 }
 
 static DEFINE_MUTEX(susfs_mutex_lock_sus_avd_allowed_hlist);
-static DEFINE_HASHTABLE(SUS_AVD_ALLOWED_HLIST, 18);
-
+#define AVD_ALLOWED_BKT_SIZE 18
+#define MAX_AVD_ALLOWED_ENTRIES 262144 // bucket size of 18
+static DEFINE_HASHTABLE(SUS_AVD_ALLOWED_HLIST, AVD_ALLOWED_BKT_SIZE);
+static atomic_t avd_allowed_counter = ATOMIC_INIT(0);
 struct susfs_sus_av_rule {
 	struct hlist_node node;
 	u32 s_type;
@@ -102,19 +103,7 @@ struct susfs_sus_av_rule {
 
 static inline u32 susfs_av_rule_hash(u32 ssid, u32 tsid, u16 tclass)
 {
-	u32 h;
-
-	/* Mix each field with a different rotation/multiplier */
-	h = hash_32(ssid, 32);
-	h ^= rol32(hash_32(tsid, 32), 13);
-	h ^= rol32(hash_32(tclass, 32), 19);
-
-	/* Final avalanche pass to break patterns */
-	h += h << 13;
-	h ^= h >> 7;
-	h += h << 17;
-
-	return h;
+	return hash_32(ssid ^ (tsid << 2) ^ (tclass << 4), AVD_ALLOWED_BKT_SIZE);
 }
 
 int susfs_add_sus_avd_allowed_by_type(u32 s_type, u32 t_type, u32 c_type, u32 orig_avd_allowed)
@@ -122,29 +111,41 @@ int susfs_add_sus_avd_allowed_by_type(u32 s_type, u32 t_type, u32 c_type, u32 or
 	struct susfs_sus_av_rule *entry, *tmp_entry;
 	struct hlist_node *tmp_hlist_node;
 	int err = 0;
-	u32 key = susfs_av_rule_hash(s_type, t_type, c_type);
+	u32 key;
+
+	// Do not allow to add any new rule if it has the maximum limit.
+	if (atomic_read(&avd_allowed_counter) >= MAX_AVD_ALLOWED_ENTRIES) {
+		SUSFS_LOGE("SUS_AVD_ALLOWED_HLIST has reached the maximum limit of %u", MAX_AVD_ALLOWED_ENTRIES);
+		return -EINVAL;
+	}
 
 	mutex_lock(&susfs_mutex_lock_sus_avd_allowed_hlist);
+
 	entry = kzalloc(sizeof(*entry), GFP_ATOMIC);
 	if (!entry) {
 		err = -ENOMEM;
 		goto unlock;
 	}
 
+	key = susfs_av_rule_hash(s_type, t_type, c_type);
 	hash_for_each_possible_safe(SUS_AVD_ALLOWED_HLIST, tmp_entry, tmp_hlist_node, node, key) {
 		if (tmp_entry->s_type == s_type &&
 		    tmp_entry->t_type == t_type &&
 		    tmp_entry->c_type == c_type)
 		{
+			// Do not apply any new orig_avd_allowed for matched entry.
 			kfree(entry);
 			goto unlock;
 		}
 	}
 
+	atomic_inc(&avd_allowed_counter);
+
 	entry->s_type = s_type;
 	entry->t_type = t_type;
 	entry->c_type = c_type;
 	entry->orig_avd_allowed = orig_avd_allowed;
+
 
 	hash_add_rcu(SUS_AVD_ALLOWED_HLIST, &entry->node, key);
 	SUSFS_LOGI("av_rule '%u %u %u %u' has been added to SUS_AVD_ALLOWED_HLIST\n",
@@ -160,15 +161,10 @@ void susfs_spoof_avd_allowed_rcu(u32 s_type, u32 t_type, u32 c_type, u32 *avd_al
 	u32 key = susfs_av_rule_hash(s_type, t_type, c_type);
 
 	hash_for_each_possible_rcu(SUS_AVD_ALLOWED_HLIST, entry, node, key) {
-		if (entry->s_type == s_type &&
-		    entry->t_type == t_type &&
-		    entry->c_type == c_type)
-		{
-			//SUSFS_LOGI("restoring orig_avd_allowed '%u %u %u %u'\n",
-			//	s_type, t_type, c_type, entry->orig_avd_allowed);
-			*avd_allowed = entry->orig_avd_allowed;
-			return;
-		}
+		// Here we dont check for collision as the bucket size of 18 and
+		// susfs_av_rule_hash() should be capable of ~262,144 unique entries.
+		*avd_allowed = entry->orig_avd_allowed;
+		return;
 	}
 }
 

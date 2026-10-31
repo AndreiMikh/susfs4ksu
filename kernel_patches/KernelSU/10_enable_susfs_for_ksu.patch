@@ -1,5 +1,5 @@
 diff --git a/kernel/Kbuild b/kernel/Kbuild
-index ee5af0ba..faaa55eb 100644
+index 66aa2ba9..9b88d179 100644
 --- a/kernel/Kbuild
 +++ b/kernel/Kbuild
 @@ -5,21 +5,7 @@ kernelsu-objs += feature/module_blacklist.o
@@ -24,7 +24,7 @@ index ee5af0ba..faaa55eb 100644
  
  kernelsu-objs += infra/file_wrapper.o
  kernelsu-objs += infra/event_queue.o
-@@ -66,9 +52,6 @@ endif
+@@ -68,9 +54,6 @@ endif
  ifeq ($(CONFIG_KSU_DEBUG),y)
  ccflags-y += -DCONFIG_KSU_DEBUG=1
  endif
@@ -171,7 +171,7 @@ index 05888d7b..208e7f0e 100644
 +
  # Keep a new line here!! Because someone may append config
 diff --git a/kernel/core/init.c b/kernel/core/init.c
-index 6ee1c35d..f7c660a2 100644
+index 81f3b658..6c1d38aa 100644
 --- a/kernel/core/init.c
 +++ b/kernel/core/init.c
 @@ -6,6 +6,7 @@
@@ -191,7 +191,7 @@ index 6ee1c35d..f7c660a2 100644
  #include "runtime/ksud.h"
  #include "runtime/ksud_boot.h"
  #include "feature/sulog.h"
-@@ -22,21 +21,14 @@
+@@ -22,21 +21,15 @@
  #include "ksu.h"
  #include "infra/file_wrapper.h"
  #include "selinux/selinux.h"
@@ -200,7 +200,7 @@ index 6ee1c35d..f7c660a2 100644
  #include "feature/selinux_hide.h"
  #include "feature/module_blacklist.h"
  #include "feature/shell_su_adb_only.h"
--#include "infra/symbol_resolver.h"
+ #include "infra/symbol_resolver.h"
  #include "preinit/preinit.h"
 +#include "hook/setuid_hook.h"
 +#include "feature/sucompat.h"
@@ -215,7 +215,7 @@ index 6ee1c35d..f7c660a2 100644
  
  // workaround for A12-5.10 kernel
  // Some third-party kernel (e.g. linegaeOS) uses wrong toolchain, which supports
-@@ -74,7 +66,6 @@ __attribute__((naked)) int __init kernelsu_init_early(void)
+@@ -74,7 +67,6 @@ __attribute__((naked)) int __init kernelsu_init_early(void)
  #endif
  
  struct cred *ksu_cred;
@@ -223,7 +223,7 @@ index 6ee1c35d..f7c660a2 100644
  
  #ifdef CONFIG_KSU_DEBUG
  bool allow_shell = true;
-@@ -86,36 +77,9 @@ module_param(allow_shell, bool, 0);
+@@ -86,38 +78,11 @@ module_param(allow_shell, bool, 0);
  bool ksu_no_custom_rc = false;
  module_param_named(norc, ksu_no_custom_rc, bool, 0);
  
@@ -234,6 +234,8 @@ index 6ee1c35d..f7c660a2 100644
 -
  int __init kernelsu_init(void)
  {
+     int ret;
+ 
      pr_info("welcome to KernelSU version " __stringify(KERNEL_SU_VERSION) ", package name " KSU_PACKAGE_NAME "\n");
 -#if defined(__x86_64__) && !defined(CONFIG_KSU_X86_PATCH_SYSCALL_DISPATCHER)
 -    // If the kernel has the hardening patch, X86_FEATURE_INDIRECT_SAFE must be set
@@ -260,7 +262,7 @@ index 6ee1c35d..f7c660a2 100644
  #ifdef CONFIG_KSU_DEBUG
      pr_alert("*************************************************************");
      pr_alert("**     NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE    **");
-@@ -125,6 +89,7 @@ int __init kernelsu_init(void)
+@@ -127,6 +92,7 @@ int __init kernelsu_init(void)
      pr_alert("**     NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE NOTICE    **");
      pr_alert("*************************************************************");
  #endif
@@ -268,11 +270,10 @@ index 6ee1c35d..f7c660a2 100644
      if (allow_shell) {
          pr_alert("shell is allowed at init!");
      }
-@@ -135,86 +100,48 @@ int __init kernelsu_init(void)
-         return -ENOSYS;
+@@ -147,85 +113,48 @@ int __init kernelsu_init(void)
+         return ret;
      }
  
--    ksu_init_symbol_resolver();
 -    ksu_syscall_hook_init();
 +#ifdef CONFIG_KSU_SUSFS
 +    susfs_init();
@@ -372,7 +373,7 @@ index 6ee1c35d..f7c660a2 100644
  
      // Wait for any in-flight RCU readers (e.g. handler traversing allow_list)
      synchronize_rcu();
-@@ -227,11 +154,15 @@ void __exit kernelsu_exit(void)
+@@ -238,11 +167,15 @@ void __exit kernelsu_exit(void)
      ksu_allowlist_exit();
  
      ksu_shell_su_adb_only_exit();
@@ -2580,10 +2581,10 @@ index e5dcc4d3..72084b64 100644
 +}
 +
 diff --git a/kernel/selinux/selinux.h b/kernel/selinux/selinux.h
-index 158f9455..90cc2ac0 100644
+index b1918a42..4eee3f1c 100644
 --- a/kernel/selinux/selinux.h
 +++ b/kernel/selinux/selinux.h
-@@ -42,4 +42,13 @@ void escape_to_root_for_adb_root();
+@@ -55,4 +55,13 @@ static inline int ksu_selinux_inode_init(void)
  
  extern u32 ksu_file_sid;
  

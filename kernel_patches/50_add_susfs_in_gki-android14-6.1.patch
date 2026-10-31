@@ -2890,7 +2890,7 @@ index 755325a94..8347aff59 100644
  {
  	struct selinux_fs_info *fsi = file_inode(file)->i_sb->s_fs_info;
 diff --git a/security/selinux/ss/services.c b/security/selinux/ss/services.c
-index 5e7bd32db..84361bed6 100644
+index 5e7bd32db..28e377071 100644
 --- a/security/selinux/ss/services.c
 +++ b/security/selinux/ss/services.c
 @@ -70,6 +70,14 @@
@@ -3014,15 +3014,15 @@ index 5e7bd32db..84361bed6 100644
 +
 +	typdatum = symtab_search(&pol->p_types, scontextp);
 +
-+	if (typdatum) {
-+		bool is_sus = susfs_is_sus_type_rcu(typdatum->value);
-+		if (typdatum->attribute || is_sus)
++	if (typdatum && !typdatum->attribute) {
++		if (likely(susfs_is_sus_type_rcu(typdatum->value)))
 +			goto out;
++		goto orig_flow;
 +	}
 +
-+	if (!typdatum || typdatum->attribute)
-+		goto out;
++	goto out;
 +
++orig_flow:
 +	ctx->type = typdatum->value;
 +
 +	rc = mls_context_to_sid(pol, oldc, p, ctx, sidtabp, def_sid);

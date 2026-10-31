@@ -83,7 +83,7 @@ bool susfs_is_sus_type_rcu(u32 type_value) {
 	struct st_susfs_sus_type_hlist *entry = NULL;
 
 	hash_for_each_possible_rcu(SUS_TYPE_HLIST, entry, node, type_value) {
-		SUSFS_LOGI("type '%u', is sus\n", type_value);
+		//SUSFS_LOGI("type '%u', is sus\n", type_value);
 		return true;
 	}
 	return false;
@@ -164,8 +164,8 @@ void susfs_spoof_avd_allowed_rcu(u32 s_type, u32 t_type, u32 c_type, u32 *avd_al
 		    entry->t_type == t_type &&
 		    entry->c_type == c_type)
 		{
-			SUSFS_LOGI("restoring orig_avd_allowed '%u %u %u %u'\n",
-				s_type, t_type, c_type, entry->orig_avd_allowed);
+			//SUSFS_LOGI("restoring orig_avd_allowed '%u %u %u %u'\n",
+			//	s_type, t_type, c_type, entry->orig_avd_allowed);
 			*avd_allowed = entry->orig_avd_allowed;
 			return;
 		}

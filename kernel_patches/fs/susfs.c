@@ -100,10 +100,21 @@ struct susfs_sus_av_rule {
 	u32 orig_avd_allowed;
 };
 
-static inline int avc_hash(u32 ssid, u32 tsid, u16 tclass)
+static inline u32 susfs_av_rule_hash(u32 ssid, u32 tsid, u16 tclass)
 {
-#define AVC_CACHE_SLOTS			512
-	return (ssid ^ (tsid<<2) ^ (tclass<<4)) & (AVC_CACHE_SLOTS - 1);
+	u32 h;
+
+	/* Mix each field with a different rotation/multiplier */
+	h = hash_32(ssid, 32);
+	h ^= rol32(hash_32(tsid, 32), 13);
+	h ^= rol32(hash_32(tclass, 32), 19);
+
+	/* Final avalanche pass to break patterns */
+	h += h << 13;
+	h ^= h >> 7;
+	h += h << 17;
+
+	return h;
 }
 
 int susfs_add_sus_avd_allowed_by_type(u32 s_type, u32 t_type, u32 c_type, u32 orig_avd_allowed)
@@ -111,7 +122,7 @@ int susfs_add_sus_avd_allowed_by_type(u32 s_type, u32 t_type, u32 c_type, u32 or
 	struct susfs_sus_av_rule *entry, *tmp_entry;
 	struct hlist_node *tmp_hlist_node;
 	int err = 0;
-	u32 key = avc_hash(s_type, t_type, c_type);
+	u32 key = susfs_av_rule_hash(s_type, t_type, c_type);
 
 	mutex_lock(&susfs_mutex_lock_sus_avd_allowed_hlist);
 	entry = kzalloc(sizeof(*entry), GFP_ATOMIC);
@@ -146,7 +157,7 @@ unlock:
 void susfs_spoof_avd_allowed_rcu(u32 s_type, u32 t_type, u32 c_type, u32 *avd_allowed)
 {
 	struct susfs_sus_av_rule *entry;
-	u32 key = avc_hash(s_type, t_type, c_type);
+	u32 key = susfs_av_rule_hash(s_type, t_type, c_type);
 
 	hash_for_each_possible_rcu(SUS_AVD_ALLOWED_HLIST, entry, node, key) {
 		if (entry->s_type == s_type &&

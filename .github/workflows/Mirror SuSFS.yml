@@ -1,4 +1,4 @@
-name: Mirror SUSFS Test
+name: Mirror Gitlab SuSFS For KSU
 on:
   workflow_dispatch:
   schedule:
